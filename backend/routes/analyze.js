@@ -60,9 +60,13 @@ router.post('/analyze', upload.single('resume'), async (req, res) => {
     // 1. Extract text from resume
     const resumeText = await extractText(file);
 
-    // 2. Initialize OpenAI
-    const { OpenAI } = require('openai');
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    // 2. Initialize Gemini
+    const { GoogleGenerativeAI } = require("@google/generative-ai");
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-flash",
+      generationConfig: { responseMimeType: "application/json" }
+    });
 
     // 3. Request AI Analysis
     const prompt = `
@@ -86,16 +90,8 @@ router.post('/analyze', upload.single('resume'), async (req, res) => {
       - final_verdict: A short, professional summary of the candidate's fit.
     `;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: "You are a professional resume analyzer. Always return valid JSON." },
-        { role: "user", content: prompt }
-      ],
-      response_format: { type: "json_object" },
-    });
-
-    const aiResponse = JSON.parse(completion.choices[0].message.content);
+    const result = await model.generateContent(prompt);
+    const aiResponse = JSON.parse(result.response.text());
     res.json(aiResponse);
 
   } catch (error) {
