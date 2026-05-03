@@ -96,12 +96,23 @@ router.post('/analyze', upload.single('resume'), async (req, res) => {
     `;
 
     const completion = await openai.chat.completions.create({
-      model: "google/gemini-flash-1.5:free", // Corrected: use colon for free models on OpenRouter
+      model: "google/gemini-flash-1.5:free",
       messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
     });
 
-    const aiResponse = JSON.parse(completion.choices[0].message.content);
+    const responseText = completion.choices[0].message.content;
+    
+    // Robust JSON parsing (handles markdown blocks if AI includes them)
+    let aiResponse;
+    try {
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      const jsonString = jsonMatch ? jsonMatch[0] : responseText;
+      aiResponse = JSON.parse(jsonString);
+    } catch (parseError) {
+      console.error("JSON Parse Error:", responseText);
+      throw new Error("Failed to parse AI response. The AI returned: " + responseText.substring(0, 100));
+    }
+    
     res.json(aiResponse);
 
   } catch (error) {
