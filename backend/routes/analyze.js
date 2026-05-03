@@ -60,10 +60,15 @@ router.post('/analyze', upload.single('resume'), async (req, res) => {
     // 1. Extract text from resume
     const resumeText = await extractText(file);
 
-    // 2. Initialize OpenAI
+    // 2. Initialize OpenRouter (via OpenAI SDK)
     const OpenAI = require("openai");
     const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
+      baseURL: "https://openrouter.ai/api/v1",
+      apiKey: process.env.OPENROUTER_API_KEY,
+      defaultHeaders: {
+        "HTTP-Referer": "https://resume-analyzer-beta.vercel.app", // Optional, for OpenRouter rankings
+        "X-Title": "AI Resume Analyzer", // Optional
+      }
     });
 
     // 3. Request AI Analysis
@@ -91,7 +96,7 @@ router.post('/analyze', upload.single('resume'), async (req, res) => {
     `;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "google/gemini-flash-1.5-free", // You can change this to any OpenRouter model
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
     });
