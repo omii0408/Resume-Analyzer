@@ -11,8 +11,8 @@ const upload = multer({
   storage: storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf' || 
-        file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    if (file.mimetype === 'application/pdf' ||
+      file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
       cb(null, true);
     } else {
       cb(new Error('Invalid file type. Only PDF and DOCX are allowed.'));
@@ -27,7 +27,7 @@ const extractText = async (file) => {
       // Step 1: Reconstruct the PDF using pdf-lib to fix any 'bad XRef entry' issues
       const pdfDoc = await PDFDocument.load(file.buffer, { ignoreEncryption: true });
       const reconstructedPdfBytes = await pdfDoc.save();
-      
+
       // Step 2: Parse the clean, reconstructed PDF
       const data = await pdfParse(Buffer.from(reconstructedPdfBytes));
       return data.text;
@@ -63,10 +63,15 @@ router.post('/analyze', upload.single('resume'), async (req, res) => {
     // 2. Initialize Gemini
     const { GoogleGenerativeAI } = require("@google/generative-ai");
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash",
-      generationConfig: { responseMimeType: "application/json" }
-    });
+
+    // Using a more robust model selection with fallback
+    let model;
+    try {
+      model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    } catch (e) {
+      console.warn("Gemini 1.5 Flash failed to init, falling back to gemini-pro");
+      model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    }
 
     // 3. Request AI Analysis
     const prompt = `
@@ -79,19 +84,42 @@ router.post('/analyze', upload.single('resume'), async (req, res) => {
       Job Description:
       ${jobDescription}
       
-      Provide a comprehensive analysis in JSON format with these exact keys:
-      - ATS_score: A score from 0-100 based on how well the resume is formatted for ATS.
-      - match_percentage: A percentage from 0-100 showing how well the candidate's skills match the job.
-      - missing_skills: An array of key technical or soft skills found in the JD but missing from the resume.
-      - strengths: An array of 3-4 key strengths the candidate has for this specific role.
-      - weaknesses: An array of 2-3 areas where the candidate falls short.
-      - improvements: An array of actionable advice to improve the resume.
-      - rewritten_points: An array of 2-3 bullet points from the resume rewritten to be more impactful.
-      - final_verdict: A short, professional summary of the candidate's fit.
+      Provide a comprehensive analysis. YOU MUST RETURN ONLY A VALID JSON OBJECT with these exact keys:
+      - ATS_score: A score from 0-100.
+      - match_percentage: A percentage from 0-100.
+      - missing_skills: An array of strings.
+      - strengths: An array of strings.
+      - weaknesses: An array of strings.
+      - improvements: An array of strings.
+      - rewritten_points: An array of strings.
+      - final_verdict: A short string.
+
+      Do not include any markdown formatting like \`\`\`json or \`\`\`. Just the raw JSON object.
     `;
 
-    const result = await model.generateContent(prompt);
-    const aiResponse = JSON.parse(result.response.text());
+    let result;
+    try {
+      result = await model.generateContent(prompt);
+    } catch (apiError) {
+      // If Flash fails at runtime (e.g. 404), try gemini-pro as a last resort
+      console.error("Flash failed at runtime, trying gemini-pro:", apiError.message);
+      const fallbackModel = genAI.getGenerativeModel({ model: "gemini-pro" });
+      result = await fallbackModel.generateContent(prompt);
+    }
+
+    const responseText = result.response.text();
+
+    // Robust JSON parsing (handles markdown blocks if AI includes them)
+    let aiResponse;
+    try {
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      const jsonString = jsonMatch ? jsonMatch[0] : responseText;
+      aiResponse = JSON.parse(jsonString);
+    } catch (parseError) {
+      console.error("JSON Parse Error:", responseText);
+      throw new Error("Failed to parse AI response into JSON. The AI returned: " + responseText.substring(0, 100));
+    }
+
     res.json(aiResponse);
 
   } catch (error) {
