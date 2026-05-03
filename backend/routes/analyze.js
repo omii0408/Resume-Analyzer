@@ -4,6 +4,18 @@ const multer = require('multer');
 const { PDFDocument } = require('pdf-lib');
 const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
+const OpenAI = require('openai');
+
+const openai = new OpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey: process.env.OPENROUTER_API_KEY,
+  defaultHeaders: {
+    'HTTP-Referer': 'https://resume-analyzer-8qrssy8bl-omii0408s-projects.vercel.app/',
+    'X-Title': 'AI Resume Analyzer',
+  }
+});
+
+const MODEL = 'google/gemma-3-4b-it:free';
 
 // Configure multer for memory storage
 const storage = multer.memoryStorage();
@@ -60,16 +72,7 @@ router.post('/analyze', upload.single('resume'), async (req, res) => {
     // 1. Extract text from resume
     const resumeText = await extractText(file);
 
-    // 2. Initialize OpenRouter (via OpenAI SDK)
-    const OpenAI = require("openai");
-    const openai = new OpenAI({
-      baseURL: "https://openrouter.ai/api/v1",
-      apiKey: process.env.OPENROUTER_API_KEY,
-      defaultHeaders: {
-        "HTTP-Referer": "https://resume-analyzer-8qrssy8bl-omii0408s-projects.vercel.app/", // Optional, for OpenRouter rankings
-        "X-Title": "AI Resume Analyzer", // Optional
-      }
-    });
+    // 2. OpenAI/OpenRouter client is initialized at the top of the file
 
     // 3. Request AI Analysis
     const prompt = `
@@ -96,8 +99,8 @@ router.post('/analyze', upload.single('resume'), async (req, res) => {
     `;
 
     const completion = await openai.chat.completions.create({
-      model: "google/gemini-flash-1.5:free",
-      messages: [{ role: "user", content: prompt }],
+      model: MODEL,
+      messages: [{ role: 'user', content: prompt }],
     });
 
     const responseText = completion.choices[0].message.content;
