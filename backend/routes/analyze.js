@@ -60,18 +60,11 @@ router.post('/analyze', upload.single('resume'), async (req, res) => {
     // 1. Extract text from resume
     const resumeText = await extractText(file);
 
-    // 2. Initialize Gemini
-    const { GoogleGenerativeAI } = require("@google/generative-ai");
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-    // Using a more robust model selection with fallback
-    let model;
-    try {
-      model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    } catch (e) {
-      console.warn("Gemini 1.5 Flash failed to init, falling back to gemini-pro");
-      model = genAI.getGenerativeModel({ model: "gemini-pro" });
-    }
+    // 2. Initialize OpenAI
+    const OpenAI = require("openai");
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
 
     // 3. Request AI Analysis
     const prompt = `
@@ -94,32 +87,16 @@ router.post('/analyze', upload.single('resume'), async (req, res) => {
       - rewritten_points: An array of strings.
       - final_verdict: A short string.
 
-      Do not include any markdown formatting like \`\`\`json or \`\`\`. Just the raw JSON object.
+      Return ONLY the JSON. No markdown tags.
     `;
 
-    let result;
-    try {
-      result = await model.generateContent(prompt);
-    } catch (apiError) {
-      // If Flash fails at runtime (e.g. 404), try gemini-pro as a last resort
-      console.error("Flash failed at runtime, trying gemini-pro:", apiError.message);
-      const fallbackModel = genAI.getGenerativeModel({ model: "gemini-pro" });
-      result = await fallbackModel.generateContent(prompt);
-    }
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+      response_format: { type: "json_object" },
+    });
 
-    const responseText = result.response.text();
-
-    // Robust JSON parsing (handles markdown blocks if AI includes them)
-    let aiResponse;
-    try {
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      const jsonString = jsonMatch ? jsonMatch[0] : responseText;
-      aiResponse = JSON.parse(jsonString);
-    } catch (parseError) {
-      console.error("JSON Parse Error:", responseText);
-      throw new Error("Failed to parse AI response into JSON. The AI returned: " + responseText.substring(0, 100));
-    }
-
+    const aiResponse = JSON.parse(completion.choices[0].message.content);
     res.json(aiResponse);
 
   } catch (error) {
