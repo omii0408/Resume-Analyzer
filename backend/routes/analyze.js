@@ -66,7 +66,7 @@ router.post('/analyze', upload.single('resume'), async (req, res) => {
       baseURL: "https://openrouter.ai/api/v1",
       apiKey: process.env.OPENROUTER_API_KEY,
       defaultHeaders: {
-        "HTTP-Referer": "https://resume-analyzer-beta.vercel.app", // Optional, for OpenRouter rankings
+        "HTTP-Referer": "https://resume-analyzer-8qrssy8bl-omii0408s-projects.vercel.app/", // Optional, for OpenRouter rankings
         "X-Title": "AI Resume Analyzer", // Optional
       }
     });
