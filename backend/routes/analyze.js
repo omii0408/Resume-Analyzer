@@ -96,7 +96,7 @@ router.post('/analyze', upload.single('resume'), async (req, res) => {
     `;
 
     const completion = await openai.chat.completions.create({
-      model: "google/gemini-flash-1.5-free", // You can change this to any OpenRouter model
+      model: "google/gemini-flash-1.5:free", // Corrected: use colon for free models on OpenRouter
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
     });
