@@ -1,4 +1,6 @@
 {
+  "name": "resume-analyzer-root",
+  "version": "1.0.0",
   "dependencies": {
     "openai": "^6.35.0"
   }
