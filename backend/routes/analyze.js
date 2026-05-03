@@ -60,40 +60,43 @@ router.post('/analyze', upload.single('resume'), async (req, res) => {
     // 1. Extract text from resume
     const resumeText = await extractText(file);
 
-    // 2. Mock AI Analysis Delay
-    await new Promise(resolve => setTimeout(resolve, 2500));
+    // 2. Initialize OpenAI
+    const { OpenAI } = require('openai');
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-    // 3. Mocked AI Response
-    const mockResponse = {
-      ATS_score: 75,
-      match_percentage: 68,
-      missing_skills: [
-        "Docker",
-        "Kubernetes",
-        "GraphQL"
-      ],
-      strengths: [
-        "Strong React background",
-        "Good understanding of Node.js",
-        "Demonstrated experience in UI/UX"
-      ],
-      weaknesses: [
-        "Lack of cloud deployment experience",
-        "No mention of CI/CD pipelines"
-      ],
-      improvements: [
-        "Add quantifiable metrics to your recent job experience",
-        "Include links to live projects or GitHub repositories",
-        "Highlight any experience with Agile methodologies"
-      ],
-      rewritten_points: [
-        "Developed and maintained React-based frontend applications resulting in a 20% increase in user retention.",
-        "Collaborated with backend teams to integrate RESTful APIs seamlessly into the client-side infrastructure."
-      ],
-      final_verdict: "Good potential but needs more emphasis on DevOps and modern deployment tools to fully match the requirements."
-    };
+    // 3. Request AI Analysis
+    const prompt = `
+      You are an expert ATS (Applicant Tracking System) and career coach.
+      Analyze the following resume against the provided job description.
+      
+      Resume Text:
+      ${resumeText}
+      
+      Job Description:
+      ${jobDescription}
+      
+      Provide a comprehensive analysis in JSON format with these exact keys:
+      - ATS_score: A score from 0-100 based on how well the resume is formatted for ATS.
+      - match_percentage: A percentage from 0-100 showing how well the candidate's skills match the job.
+      - missing_skills: An array of key technical or soft skills found in the JD but missing from the resume.
+      - strengths: An array of 3-4 key strengths the candidate has for this specific role.
+      - weaknesses: An array of 2-3 areas where the candidate falls short.
+      - improvements: An array of actionable advice to improve the resume.
+      - rewritten_points: An array of 2-3 bullet points from the resume rewritten to be more impactful.
+      - final_verdict: A short, professional summary of the candidate's fit.
+    `;
 
-    res.json(mockResponse);
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: "You are a professional resume analyzer. Always return valid JSON." },
+        { role: "user", content: prompt }
+      ],
+      response_format: { type: "json_object" },
+    });
+
+    const aiResponse = JSON.parse(completion.choices[0].message.content);
+    res.json(aiResponse);
 
   } catch (error) {
     console.error('Analysis error:', error);
