@@ -31,7 +31,7 @@ function App() {
     formData.append('jobDescription', jobDescription);
 
     try {
-      const response = await axios.post('http://localhost:5000/api/analyze', formData, {
+      const response = await axios.post('https://resume-analyzer-5si1.onrender.com/api/analyze', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
