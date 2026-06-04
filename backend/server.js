@@ -6,8 +6,12 @@ const cors = require('cors');
 // Load .env from the backend directory explicitly
 dotenv.config({ path: path.join(__dirname, '.env') });
 
-// Debug: confirm API key is loaded
-console.log('OPENROUTER_API_KEY loaded:', process.env.OPENROUTER_API_KEY ? '✅ YES (length: ' + process.env.OPENROUTER_API_KEY.length + ')' : '❌ NOT FOUND');
+// Debug: confirm API keys are loaded
+console.log('--- API Key Configuration ---');
+console.log('OPENROUTER_API_KEY loaded:', process.env.OPENROUTER_API_KEY ? '✅ YES' : '❌ NOT FOUND');
+console.log('OPENAI_API_KEY loaded:    ', process.env.OPENAI_API_KEY ? '✅ YES' : '❌ NOT FOUND');
+console.log('GEMINI_API_KEY loaded:    ', process.env.GEMINI_API_KEY ? '✅ YES' : '❌ NOT FOUND');
+console.log('-----------------------------');
 
 const app = express();
 app.use(cors());

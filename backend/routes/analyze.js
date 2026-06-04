@@ -5,17 +5,64 @@ const { PDFDocument } = require('pdf-lib');
 const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
 const OpenAI = require('openai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-const openai = new OpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY,
-  defaultHeaders: {
-    'HTTP-Referer': 'https://resume-analyzer-8qrssy8bl-omii0408s-projects.vercel.app/',
-    'X-Title': 'AI Resume Analyzer',
+// Lazy initialization helper for AI client (OpenRouter, OpenAI, or direct Google Gemini)
+let aiClient;
+let selectedModel = 'google/gemma-3-4b-it:free';
+let provider = 'openrouter';
+
+function getAIClient() {
+  if (!aiClient) {
+    const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("Missing API Key. Please configure OPENROUTER_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY in your environment variables (.env file).");
+    }
+
+    const isOpenRouter = apiKey.startsWith('sk-or-');
+    const isGemini = apiKey.startsWith('AIzaSy') || apiKey.startsWith('AQ.');
+    const isOpenAI = apiKey.startsWith('sk-proj-') || (apiKey.startsWith('sk-') && !apiKey.startsWith('sk-or-') && !isGemini);
+
+    if (isGemini) {
+      console.log("Detected Google Gemini API Key. Using official Google Gen AI SDK and gemini-2.5-flash model.");
+      provider = 'gemini';
+      selectedModel = 'gemini-2.5-flash';
+      aiClient = new GoogleGenerativeAI(apiKey);
+    } else if (isOpenAI) {
+      console.log("Detected OpenAI API Key. Using standard OpenAI endpoint and gpt-4o-mini model.");
+      provider = 'openai';
+      selectedModel = 'gpt-4o-mini';
+      aiClient = new OpenAI({
+        apiKey: apiKey
+      });
+    } else if (isOpenRouter) {
+      console.log("Detected OpenRouter API Key. Using OpenRouter endpoint and google/gemma-3-4b-it:free model.");
+      provider = 'openrouter';
+      selectedModel = 'google/gemma-3-4b-it:free';
+      aiClient = new OpenAI({
+        baseURL: 'https://openrouter.ai/api/v1',
+        apiKey: apiKey,
+        defaultHeaders: {
+          'HTTP-Referer': 'https://resume-analyzer-8qrssy8bl-omii0408s-projects.vercel.app/',
+          'X-Title': 'AI Resume Analyzer',
+        }
+      });
+    } else {
+      console.log("Unknown API Key format. Defaulting to OpenRouter configuration.");
+      provider = 'openrouter';
+      selectedModel = 'google/gemma-3-4b-it:free';
+      aiClient = new OpenAI({
+        baseURL: 'https://openrouter.ai/api/v1',
+        apiKey: apiKey,
+        defaultHeaders: {
+          'HTTP-Referer': 'https://resume-analyzer-8qrssy8bl-omii0408s-projects.vercel.app/',
+          'X-Title': 'AI Resume Analyzer',
+        }
+      });
+    }
   }
-});
-
-const MODEL = 'google/gemma-3-4b-it:free';
+  return { client: aiClient, model: selectedModel, provider };
+}
 
 // Configure multer for memory storage
 const storage = multer.memoryStorage();
@@ -98,12 +145,21 @@ router.post('/analyze', upload.single('resume'), async (req, res) => {
       Return ONLY the JSON. No markdown tags.
     `;
 
-    const completion = await openai.chat.completions.create({
-      model: MODEL,
-      messages: [{ role: 'user', content: prompt }],
-    });
+    const { client, model, provider } = getAIClient();
+    let responseText;
 
-    const responseText = completion.choices[0].message.content;
+    if (provider === 'gemini') {
+      const modelInstance = client.getGenerativeModel({ model: model });
+      const result = await modelInstance.generateContent(prompt);
+      const response = await result.response;
+      responseText = response.text();
+    } else {
+      const completion = await client.chat.completions.create({
+        model: model,
+        messages: [{ role: 'user', content: prompt }],
+      });
+      responseText = completion.choices[0].message.content;
+    }
     
     // Robust JSON parsing (handles markdown blocks if AI includes them)
     let aiResponse;
@@ -120,7 +176,17 @@ router.post('/analyze', upload.single('resume'), async (req, res) => {
 
   } catch (error) {
     console.error('Analysis error:', error);
-    res.status(500).json({ error: error.message || 'An error occurred during analysis.' });
+    let errorMessage = error.message || 'An error occurred during analysis.';
+    
+    // Add helpful instructions for 429 quota errors
+    if (errorMessage.includes('quota') || errorMessage.includes('429')) {
+      errorMessage = "Your API Key has exceeded its quota limit. To resolve this, you can:\n" +
+        "1. Check your OpenAI billing/billing setup (for standard OpenAI keys).\n" +
+        "2. Or register a free OpenRouter key (starts with 'sk-or-') and set it as OPENROUTER_API_KEY in your backend/.env file.\n" +
+        "3. Or get a free Gemini API key (starts with 'AIzaSy') from Google AI Studio and set it as GEMINI_API_KEY in your backend/.env file.";
+    }
+    
+    res.status(500).json({ error: errorMessage });
   }
 });
 
