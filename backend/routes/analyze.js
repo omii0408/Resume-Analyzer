@@ -9,7 +9,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // Lazy initialization helper for AI client (OpenRouter, OpenAI, or direct Google Gemini)
 let aiClient;
-let selectedModel = 'google/gemma-3-4b-it:free';
+let selectedModel = 'google/gemma-3-4b-it';
 let provider = 'openrouter';
 
 function getAIClient() {
@@ -36,9 +36,9 @@ function getAIClient() {
         apiKey: apiKey
       });
     } else if (isOpenRouter) {
-      console.log("Detected OpenRouter API Key. Using OpenRouter endpoint and google/gemma-3-4b-it:free model.");
+      console.log("Detected OpenRouter API Key. Using OpenRouter endpoint and google/gemma-3-4b-it model.");
       provider = 'openrouter';
-      selectedModel = 'google/gemma-3-4b-it:free';
+      selectedModel = 'google/gemma-3-4b-it';
       aiClient = new OpenAI({
         baseURL: 'https://openrouter.ai/api/v1',
         apiKey: apiKey,
@@ -50,7 +50,7 @@ function getAIClient() {
     } else {
       console.log("Unknown API Key format. Defaulting to OpenRouter configuration.");
       provider = 'openrouter';
-      selectedModel = 'google/gemma-3-4b-it:free';
+      selectedModel = 'google/gemma-3-4b-it';
       aiClient = new OpenAI({
         baseURL: 'https://openrouter.ai/api/v1',
         apiKey: apiKey,
@@ -118,8 +118,6 @@ router.post('/analyze', upload.single('resume'), async (req, res) => {
 
     // 1. Extract text from resume
     const resumeText = await extractText(file);
-
-    // 2. OpenAI/OpenRouter client is initialized at the top of the file
 
     // 3. Request AI Analysis
     const prompt = `
